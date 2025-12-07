@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="logo.png">
+    <title>ReKlug Screen Recorder</title>
+    <style>
+        /* --- GLOBAL STYLES --- */
+        :root {
+            --bg-color: #0f0f0f;
+            --sidebar-color: #080808;
+            --card-color: #1a1a1a;
+            --text-main: #ffffff;
+            --text-muted: #888;
+            --primary-gradient: linear-gradient(90deg, #00C6FF 0%, #0072FF 100%);
+            --glow-color: #00C6FF;
+            --red-color: #ff3b3b;
+            --blue-hover: #0072FF;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- SIDEBAR & RECORDINGS --- */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-color);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            border-right: 1px solid #333;
+        }
+
+        .logo {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+        }
+        
+        .logo span { color: var(--glow-color); }
+
+        .recordings-header {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        .recordings-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-right: 5px;
+        }
+
+        .recording-item {
+            background-color: #222;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .recording-item:hover { background-color: #333; border-color: #444; }
+        
+        .rec-top { display: flex; justify-content: space-between; align-items: center; }
+        .rec-date { font-size: 10px; color: #666; }
+
+        .btn-export-sm {
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            cursor: pointer;
+            align-self: flex-start;
+        }
+
+        /* Custom Context Menu for Recordings */
+        #contextMenu {
+            position: absolute;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 5px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 200;
+            display: none;
+            overflow: hidden;
+            padding: 5px 0;
+            min-width: 150px;
+        }
+
+        .context-item {
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.1s;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .context-item:hover {
+            background: var(--blue-hover);
+        }
+
+        /* --- MAIN CONTENT & VIEWS --- */
+        .main-content {
+            flex: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #home-view {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #home-view h1 {
+            font-size: 48px;
+            margin-bottom: 30px;
+        }
+        
+        #home-view h1 span { color: var(--glow-color); }
+
+        .btn-large {
+            background: var(--primary-gradient);
+            border: none;
+            padding: 15px 50px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 114, 255, 0.4);
+            transition: transform 0.2s;
+        }
+
+        .btn-large:hover { transform: scale(1.05); }
+
+        /* Recording Overlay */
+        #recording-interface {
+            display: none; 
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: black;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .video-preview {
+            width: 80%;
+            height: 70%;
+            background: #000;
+            border: 2px solid #333;
+            margin-bottom: 20px;
+            display: none; /* Initially hidden, shown when stream is ready */
+            object-fit: contain;
+        }
+
+        /* Hidden elements for processing */
+        #hidden-video-source { display: none; }
+        #hidden-webcam-source { display: none; }
+
+        .recording-controls-bar {
+            background: #1a1a1a;
+            padding: 15px 30px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .timer {
+            font-size: 24px;
+            font-family: monospace;
+            font-weight: bold;
+            color: white;
+        }
+
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            transition: 0.2s;
+        }
+
+        .btn-stop { background-color: var(--red-color); color: white; }
+        .btn-pause { background-color: #444; color: white; }
+
+        /* --- MODALS --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .modal-box {
+            background-color: var(--bg-color);
+            border: 1px solid #333;
+            padding: 40px;
+            border-radius: 20px;
+            width: 600px;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+        }
+
+        /* Confirmation Modal Specifics */
+        .modal-confirm {
+            width: 400px;
+            padding: 30px;
+        }
+        
+        .modal-confirm h2 {
+            color: var(--red-color);
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .confirm-btns {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .btn-yes {
+            background-color: var(--red-color);
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .btn-no {
+            background-color: #444;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* Settings Modal Styling */
+        .settings-title {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .setting-group { margin-bottom: 25px; text-align: left; }
+        .setting-label { font-size: 18px; font-weight: bold; margin-bottom: 10px; display: block;}
+        .options-row { display: flex; gap: 15px; }
+
+        .option-btn {
+            background: #333;
+            border: 2px solid transparent;
+            color: #ccc;
+            padding: 10px 25px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            flex: 1;
+            transition: 0.3s;
+        }
+
+        .option-btn.selected {
+            background: transparent;
+            border: 2px solid var(--glow-color);
+            color: white;
+            box-shadow: 0 0 10px rgba(0, 198, 255, 0.3);
+        }
+
+        .start-btn {
+            margin-top: 20px;
+            float: right;
+            padding: 10px 40px;
+            border-radius: 30px;
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .preview-video-box {
+            width: 100%;
+            height: 250px;
+            background: #000;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            border: 1px solid #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .preview-video-box video { width: 100%; height: 100%; object-fit: contain; }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .btn-download {
+            background: var(--primary-gradient);
+            border: none;
+            padding: 12px 30px;
+            border-radius: 30px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-close {
+            background: #444;
+            border: none;
+            padding: 10px 40px;
+            border-radius: 20px;
+            color: #aaa;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .btn-close:hover { color: white; background: #555; }
+
+        .hidden { display: none !important; }
+
+        #popup-warning {
+            position: absolute;
+            top: 20px;
+            background: #333;
+            padding: 10px 20px;
+            border-radius: 8px;
+            color: #ffa500;
+            font-size: 12px;
+            display: none;
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="hidden-video-source" autoplay muted></video>
+    <video id="hidden-webcam-source" autoplay muted></video>
+
+    <div class="sidebar">
+        <div class="logo">Re<span>Klug</span></div>
+        <div class="recordings-header">Recordings</div>
+        <div class="recordings-list" id="recordingsList">
+            <div style="color: #666; font-size: 12px; text-align:center; padding: 20px;">No recordings yet</div>
+        </div>
+    </div>
+    
+    <div id="contextMenu">
+        <div class="context-item" id="deleteRecording">🗑️ Delete</div>
+    </div>
+
+    <div class="main-content">
+        <div id="popup-warning">⚠️ Popup blocked! Allow popups to see the control window.</div>
+
+        <div id="home-view">
+            <h1>Start A New <span>ReKlug</span></h1>
+            <button class="btn-large" id="btnOpenSettings">Record New</button>
+        </div>
+
+        <div id="recording-interface">
+            <video id="livePreview" autoplay muted class="video-preview"></video>
+            
+            <div class="recording-controls-bar">
+                <div style="text-align:center;">
+                    <div style="color:var(--red-color); font-size:12px; margin-bottom:5px;">● REC</div>
+                    <div class="timer" id="recordingTimer">00:00:00</div>
+                </div>
+                
+                <button class="control-btn btn-pause" id="btnPause">||</button>
+                <button class="control-btn btn-stop" id="btnStop">⬛</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-box">
+            <h2 class="settings-title">Project Settings</h2>
+            <div class="setting-group">
+                <span class="setting-label">Video Quality</span>
+                <div class="options-row" id="qualityOpts">
+                    <button class="option-btn" data-val="340" onclick="selectOption('qualityOpts', this)">340p</button>
+                    <button class="option-btn selected" data-val="720" onclick="selectOption('qualityOpts', this)">720p</button>
+                    <button class="option-btn" data-val="1080" onclick="selectOption('qualityOpts', this)">1080p</button>
+                </div>
+            </div>
+            
+            <button class="start-btn" id="btnStartRecording">Start</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="postModal">
+        <div class="modal-box">
+            <div class="preview-video-box">
+                <video id="finalReviewVideo" controls></video>
+            </div>
+            
+            <h2 style="color: #0072FF; margin-bottom: 20px;">Recording Complete</h2>
+
+            <div class="modal-buttons">
+                <button class="btn-download" id="btnDownloadClean">DOWNLOAD</button>
+            </div>
+            
+            <button class="btn-close" id="btnClosePost">Save & Close</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="confirmDeleteModal">
+        <div class="modal-box modal-confirm">
+            <h2>Delete Recording?</h2>
+            <p style="color: var(--text-muted);">Are you sure you want to permanently delete this recording? This action cannot be undone.</p>
+            <div class="confirm-btns">
+                <button class="btn-yes" id="btnConfirmDelete">Yes, Delete</button>
+                <button class="btn-no" id="btnCancelDelete">No, Keep It</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="recorder.js"></script> 
+
+    <script>
+        // --- DB & STORAGE (IndexedDB) ---
+        let db;
+        const DB_NAME = "ReKlugDB";
+        const STORE_NAME = "recordings";
+        let recordingToDeleteId = null;
+
+        function initDB() {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onupgradeneeded = (e) => {
+                db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+                }
+            };
+            request.onsuccess = (e) => {
+                db = e.target.result;
+                loadRecordings();
+            };
+            request.onerror = (e) => console.error("DB Error", e);
+        }
+
+        function saveRecordingToDB(blob) {
+            if (!db || !blob || blob.size === 0) return;
+            const transaction = db.transaction([STORE_NAME], "readwrite");
+            const store = transaction.objectStore(STORE_NAME);
+            const recording = {
+                blob: blob,
+                date: new Date().toLocaleString(),
+                timestamp: Date.now()
+            };
+            store.add(recording);
+            transaction.oncomplete = () => loadRecordings();
+        }
+        
+        function deleteRecordingFromDB(id) {
+            if (!db) return;
+            const transaction = db.transaction([STORE_NAME], "readwrite");
+            const store = transaction.objectStore(STORE_NAME);
+            store.delete(id);
+            transaction.oncomplete = () => {
+                console.log(`Recording ID ${id} deleted.`);
+                loadRecordings();
+                document.getElementById('confirmDeleteModal').style.display = 'none';
+            };
+            transaction.onerror = (e) => console.error("Delete Error", e);
+        }
+
+        function loadRecordings() {
+            if (!db) {
+                 document.getElementById('recordingsList').innerHTML = '<div style="color: #666; font-size: 12px; text-align:center;">Database loading...</div>';
+                 return;
+            }
+
+            const transaction = db.transaction([STORE_NAME], "readonly");
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                const recordings = request.result;
+                const list = document.getElementById('recordingsList');
+                list.innerHTML = '';
+                
+                if (recordings.length === 0) {
+                    list.innerHTML = '<div style="color: #666; font-size: 12px; text-align:center; padding: 20px;">No recordings yet</div>';
+                    return;
+                }
+
+                recordings.sort((a, b) => b.timestamp - a.timestamp);
+
+                recordings.forEach((rec, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'recording-item';
+                    div.id = `rec-${rec.id}`;
+                    div.dataset.id = rec.id;
+                    
+                    div.innerHTML = `
+                        <div class="rec-top">
+                            <span>Recording ${recordings.length - index}</span>
+                            <span class="rec-date">${rec.date.split(',')[0]}</span>
+                        </div>
+                    `;
+                    
+                    const btn = document.createElement('button');
+                    btn.className = 'btn-export-sm';
+                    btn.innerText = 'Export';
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        downloadBlob(rec.blob, `ReKlug_Archive_${rec.timestamp}.webm`);
+                    };
+                    div.appendChild(btn);
+                    list.appendChild(div);
+
+                    div.oncontextmenu = (e) => {
+                        e.preventDefault();
+                        showContextMenu(e, rec.id);
+                    };
+                });
+            };
+        }
+        
+        // --- UI & HANDLER FUNCTIONS ---
+        // SAFELY DEFAULTS MIC/CAM TO OFF, REGARDLESS OF MISSING BUTTONS
+        let settings = { quality: 720, mic: 'none', cam: 'off' };
+
+        window.selectOption = function(groupId, btn) {
+            const group = document.getElementById(groupId);
+            const buttons = group.getElementsByClassName('option-btn');
+            for(let b of buttons) b.classList.remove('selected');
+            btn.classList.add('selected');
+            
+            const val = btn.getAttribute('data-val');
+            if(groupId === 'qualityOpts') settings.quality = parseInt(val);
+            // micOpts and camOpts groups no longer exist, so these checks are safe
+        }
+
+        document.getElementById('btnOpenSettings').onclick = () => {
+            document.getElementById('settingsModal').style.display = 'flex';
+        };
+
+        document.getElementById('btnStartRecording').onclick = async () => {
+            document.getElementById('settingsModal').style.display = 'none';
+            document.getElementById('home-view').style.display = 'none';
+            document.getElementById('recording-interface').style.display = 'flex';
+            
+            // Call the core logic from recorder.js
+            await startRecordingProcess(settings);
+        };
+        
+        document.getElementById('btnPause').onclick = window.togglePause; // Function exposed by recorder.js
+        document.getElementById('btnStop').onclick = window.stopRecordingProcess; // Function exposed by recorder.js
+
+        document.getElementById('btnDownloadClean').onclick = () => downloadBlob(window.currentBlob, `ReKlug_Recording_${Date.now()}.webm`);
+
+        function downloadBlob(blob, name) {
+            if(!blob || blob.size === 0) {
+                 alert("Cannot download: The recording is empty or invalid.");
+                 return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = name;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 100);
+        }
+
+        document.getElementById('btnClosePost').onclick = () => {
+            // Use the blob reference from the recorder.js window object
+            if(window.currentBlob) saveRecordingToDB(window.currentBlob);
+            window.currentBlob = null; // Clear blob after saving/closing
+            resetToHome(); // Function exposed by recorder.js
+        };
+
+        // --- CONTEXT MENU LOGIC (Remains here for DOM manipulation) ---
+        const contextMenu = document.getElementById('contextMenu');
+        const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+
+        function showContextMenu(event, id) {
+            // Positioning logic...
+            let left = event.clientX;
+            let top = event.clientY;
+            if (left + contextMenu.offsetWidth > window.innerWidth) left = window.innerWidth - contextMenu.offsetWidth - 10;
+            if (top + contextMenu.offsetHeight > window.innerHeight) top = window.innerHeight - contextMenu.offsetHeight - 10;
+            contextMenu.style.top = `${top}px`;
+            contextMenu.style.left = `${left}px`;
+            contextMenu.style.display = 'block';
+            recordingToDeleteId = id; 
+        }
+
+        document.onclick = () => { contextMenu.style.display = 'none'; };
+
+        document.getElementById('deleteRecording').onclick = () => {
+            contextMenu.style.display = 'none';
+            if (recordingToDeleteId !== null) { confirmDeleteModal.style.display = 'flex'; }
+        };
+
+        document.getElementById('btnCancelDelete').onclick = () => {
+            confirmDeleteModal.style.display = 'none';
+            recordingToDeleteId = null;
+        };
+
+        document.getElementById('btnConfirmDelete').onclick = () => {
+            if (recordingToDeleteId !== null) { deleteRecordingFromDB(recordingToDeleteId); recordingToDeleteId = null; }
+        };
+
+        // Initialize App
+        initDB();
+
+    </script>
+</body>
+</html>
